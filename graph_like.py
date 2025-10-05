@@ -1,0 +1,6 @@
+from typing import Protocol, Iterable, Hashable
+
+class GraphLike(Protocol):
+    def nodes(self) -> Iterable[Hashable]: ...
+
+    def neighbors(self, v: Hashable) -> Iterable[Hashable]: ...
