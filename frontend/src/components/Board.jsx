@@ -1,6 +1,6 @@
 function Board() {
     return (
-        <p>hello, world</p>
+        <canvas className="board">hahs</canvas>
     );
 }
 

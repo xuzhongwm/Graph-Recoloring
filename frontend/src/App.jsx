@@ -1,12 +1,14 @@
 import Board from "./components/Board";
 import SideBar from "./components/SideBar";
+import "./index.css"
 
 function App() {
   return (
-    <div>
+    <div id="app">
       <SideBar/>
-      <Board></Board>
+      <Board/>
     </div>
+
   );
 }
 
