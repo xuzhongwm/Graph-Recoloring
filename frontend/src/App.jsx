@@ -4,7 +4,7 @@ import SideBar from './components/SideBar'
 import { COLORS } from './colors'
 import './index.css'
 
-let nodeIdCounter = 0
+let nodeIdCounter = 1
 let edgeIdCounter = 0
 
 function checkProperColoring(nodes, edges) {
@@ -23,6 +23,11 @@ function checkProperColoring(nodes, edges) {
   return { valid: true, reason: `Valid proper ${k}-coloring` }
 }
 
+function colorName(hex) {
+  if (!hex) return 'Uncolored'
+  return COLORS.find(c => c.value === hex)?.name ?? hex
+}
+
 export default function App() {
   const [nodes, setNodes] = useState([])
   const [edges, setEdges] = useState([])
@@ -30,24 +35,38 @@ export default function App() {
   const [edgeStart, setEdgeStart] = useState(null)
   const [selectedColor, setSelectedColor] = useState(COLORS[0].value)
   const [log, setLog] = useState([])
+  const [isRecording, setIsRecording] = useState(false)
+  const [sessionStart, setSessionStart] = useState(null)
+  const [sessionEndTime, setSessionEndTime] = useState(null)
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light')
 
-  // Reset edge-in-progress whenever the active tool changes
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('theme', theme)
+  }, [theme])
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark')
+  }, [])
+
   const handleSetMode = useCallback(newMode => {
     setMode(newMode)
     setEdgeStart(null)
   }, [])
 
   const addNode = useCallback((x, y) => {
-    setNodes(prev => [...prev, { id: nodeIdCounter++, x, y, color: null }])
+    const id = nodeIdCounter++
+    setNodes(prev => [...prev, { id, x, y, color: null }])
   }, [])
 
   const addEdge = useCallback((fromId, toId) => {
     if (fromId === toId) return
+    const id = edgeIdCounter++
     setEdges(prev => {
       const dup = prev.some(
         e => (e.from === fromId && e.to === toId) || (e.from === toId && e.to === fromId)
       )
-      return dup ? prev : [...prev, { id: edgeIdCounter++, from: fromId, to: toId }]
+      return dup ? prev : [...prev, { id, from: fromId, to: toId }]
     })
   }, [])
 
@@ -56,17 +75,23 @@ export default function App() {
     if (!node || node.color === selectedColor) return
     const oldColor = node.color
     const newNodes = nodes.map(n => n.id === nodeId ? { ...n, color: selectedColor } : n)
-    const { valid } = checkProperColoring(newNodes, edges)
+    const { valid, reason } = checkProperColoring(newNodes, edges)
     setNodes(newNodes)
-    setLog(prev => [...prev, {
-      type: 'change',
-      step: prev.filter(e => e.type === 'change').length + 1,
-      nodeId,
-      fromColor: oldColor,
-      toColor: selectedColor,
-      isValid: valid,
-    }])
-  }, [nodes, edges, selectedColor])
+    if (isRecording) {
+      setLog(prev => [...prev, {
+        step: prev.length + 1,
+        nodeId,
+        fromColor: oldColor,
+        toColor: selectedColor,
+        isValid: valid,
+        reason,
+      }])
+    }
+  }, [nodes, edges, selectedColor, isRecording])
+
+  const moveNode = useCallback((nodeId, x, y) => {
+    setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, x, y } : n))
+  }, [])
 
   const deleteNode = useCallback((nodeId) => {
     setNodes(prev => prev.filter(n => n.id !== nodeId))
@@ -81,23 +106,106 @@ export default function App() {
     setNodes([])
     setEdges([])
     setLog([])
+    setIsRecording(false)
+    setSessionStart(null)
+    setSessionEndTime(null)
     setEdgeStart(null)
-    nodeIdCounter = 0
+    nodeIdCounter = 1
     edgeIdCounter = 0
   }, [])
 
   const clearLog = useCallback(() => setLog([]), [])
 
-  const saveCheckpoint = useCallback(() => {
-    const { valid, reason } = checkProperColoring(nodes, edges)
-    setLog(prev => [...prev, {
-      type: 'checkpoint',
-      valid,
-      reason,
-    }])
+  const startRecording = useCallback(() => {
+    const status = checkProperColoring(nodes, edges)
+    if (!status.valid) return
+    setLog([])
+    setSessionEndTime(null)
+    setSessionStart({
+      time: new Date(),
+      colorDesc: status.reason,
+      nodes: nodes.map(n => ({ id: n.id, color: n.color })),
+      edges: edges.map(e => ({ from: e.from, to: e.to })),
+    })
+    setIsRecording(true)
   }, [nodes, edges])
 
-  // Keyboard shortcuts
+  const stopRecording = useCallback(() => {
+    setIsRecording(false)
+    setSessionEndTime(new Date())
+  }, [])
+
+  const saveLog = useCallback(() => {
+    if (!sessionStart) return
+    const endTime = sessionEndTime ?? new Date()
+
+    const pad = n => String(n).padStart(2, '0')
+    const fmtTime = d =>
+      `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+    const fmtDate = d =>
+      d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+
+    const DIV = '═'.repeat(52)
+    const HR  = '─'.repeat(52)
+
+    const finalStatus = checkProperColoring(nodes, edges)
+    const validCount   = log.filter(e => e.isValid).length
+    const invalidCount = log.length - validCount
+
+    const lines = [
+      DIV,
+      '  Graph Recoloring Session',
+      `  ${fmtDate(sessionStart.time)}`,
+      DIV,
+      '',
+      'INITIAL STATE',
+      HR,
+      `Time     : ${fmtTime(sessionStart.time)}`,
+      `Coloring : ${sessionStart.colorDesc}`,
+      `Nodes    : ${sessionStart.nodes.map(n => `v${n.id}(${colorName(n.color)})`).join('  ')}`,
+      `Edges    : ${sessionStart.edges.length > 0
+        ? sessionStart.edges.map(e => `v${e.from}–v${e.to}`).join('  ')
+        : '(none)'}`,
+      '',
+      'RECOLORING SEQUENCE',
+      HR,
+    ]
+
+    if (log.length === 0) {
+      lines.push('  (no color changes recorded)')
+    } else {
+      log.forEach(e => {
+        const from = colorName(e.fromColor).padEnd(10)
+        const to   = colorName(e.toColor).padEnd(10)
+        const mark = e.isValid ? '✓ Valid  ' : '✗ Invalid'
+        const note = e.isValid ? e.reason : `  ← ${e.reason}`
+        lines.push(`  #${String(e.step).padStart(2)}  v${e.nodeId}  ${from}→ ${to} ${mark}${note}`)
+      })
+    }
+
+    lines.push(
+      '',
+      'FINAL STATE',
+      HR,
+      `Time     : ${fmtTime(endTime)}`,
+      `Coloring : ${finalStatus.reason}`,
+      `Nodes    : ${nodes.map(n => `v${n.id}(${colorName(n.color)})`).join('  ')}`,
+      '',
+      `Total steps: ${log.length}  |  Valid: ${validCount}  |  Invalid: ${invalidCount}`,
+      DIV,
+    )
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `recoloring-${sessionStart.time.toISOString().slice(0, 10)}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, [sessionStart, sessionEndTime, log, nodes, edges])
+
   useEffect(() => {
     const onKey = e => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
@@ -119,13 +227,18 @@ export default function App() {
         setSelectedColor={setSelectedColor}
         log={log}
         clearLog={clearLog}
-        saveCheckpoint={saveCheckpoint}
         isValid={coloringStatus.valid}
         validityReason={coloringStatus.reason}
         nodeCount={nodes.length}
         edgeCount={edges.length}
         colorCount={new Set(nodes.map(n => n.color).filter(Boolean)).size}
         clearGraph={clearGraph}
+        isRecording={isRecording}
+        startRecording={startRecording}
+        stopRecording={stopRecording}
+        saveLog={saveLog}
+        theme={theme}
+        toggleTheme={toggleTheme}
       />
       <Board
         nodes={nodes}
@@ -139,6 +252,8 @@ export default function App() {
         colorNode={colorNode}
         deleteNode={deleteNode}
         deleteEdge={deleteEdge}
+        moveNode={moveNode}
+        theme={theme}
       />
     </div>
   )
