@@ -1,97 +1,134 @@
-function SideBar() {
+import { COLORS } from '../colors'
+
+const MODES = [
+  { id: 'addNode',   label: 'Add Node',  hint: 'Click empty space to place a node',      key: 'A' },
+  { id: 'addEdge',   label: 'Add Edge',  hint: 'Click two nodes to connect them',         key: 'E' },
+  { id: 'colorNode', label: 'Color',     hint: 'Click a node to apply the active color',  key: 'C' },
+  { id: 'delete',    label: 'Delete',    hint: 'Click a node or edge to remove it',       key: 'D' },
+]
+
+export default function SideBar({
+  mode, setMode,
+  selectedColor, setSelectedColor,
+  log, clearLog, saveCheckpoint,
+  isValid, validityReason,
+  nodeCount, edgeCount, colorCount,
+  clearGraph,
+}) {
+  const currentMode = MODES.find(m => m.id === mode)
+
   return (
-    <div
-      className="d-flex flex-column flex-shrink-0 p-3 text-white bg-dark"
-      style={{ width: "280px" }}
-    >
-      <a
-        href="/"
-        className="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-white text-decoration-none"
-      >
-        <svg className="bi me-2" width="40" height="32">
-          <use xlinkHref="#bootstrap" />
-        </svg>
-        <span className="fs-4">Sidebar</span>
-      </a>
+    <div className="sidebar">
 
-      <hr />
-
-      <ul className="nav nav-pills flex-column mb-auto">
-        <li className="nav-item">
-          <a href="#" className="nav-link active" aria-current="page">
-            <svg className="bi me-2" width="16" height="16">
-              <use xlinkHref="#home" />
-            </svg>
-            Home
-          </a>
-        </li>
-        <li>
-          <a href="#" className="nav-link text-white">
-            <svg className="bi me-2" width="16" height="16">
-              <use xlinkHref="#speedometer2" />
-            </svg>
-            Dashboard
-          </a>
-        </li>
-        <li>
-          <a href="#" className="nav-link text-white">
-            <svg className="bi me-2" width="16" height="16">
-              <use xlinkHref="#table" />
-            </svg>
-            Orders
-          </a>
-        </li>
-        <li>
-          <a href="#" className="nav-link text-white">
-            <svg className="bi me-2" width="16" height="16">
-              <use xlinkHref="#grid" />
-            </svg>
-            Products
-          </a>
-        </li>
-        <li>
-          <a href="#" className="nav-link text-white">
-            <svg className="bi me-2" width="16" height="16">
-              <use xlinkHref="#people-circle" />
-            </svg>
-            Customers
-          </a>
-        </li>
-      </ul>
-
-      <hr />
-
-      <div className="dropdown">
-        <a
-          href="#"
-          className="d-flex align-items-center text-white text-decoration-none dropdown-toggle"
-          id="dropdownUser1"
-          data-bs-toggle="dropdown"
-          aria-expanded="false"
-        >
-          <img
-            src="https://github.com/mdo.png"
-            alt=""
-            width="32"
-            height="32"
-            className="rounded-circle me-2"
-          />
-          <strong>mdo</strong>
-        </a>
-
-        <ul
-          className="dropdown-menu dropdown-menu-dark text-small shadow"
-          aria-labelledby="dropdownUser1"
-        >
-          <li><a className="dropdown-item" href="#">New project...</a></li>
-          <li><a className="dropdown-item" href="#">Settings</a></li>
-          <li><a className="dropdown-item" href="#">Profile</a></li>
-          <li><hr className="dropdown-divider" /></li>
-          <li><a className="dropdown-item" href="#">Sign out</a></li>
-        </ul>
+      {/* Brand */}
+      <div className="sidebar-brand">
+        <span className="brand-icon">⬡</span>
+        <span className="brand-name">Graph Recoloring</span>
       </div>
-    </div>
-  );
-}
 
-export default SideBar;
+      {/* Graph stats */}
+      <div className="sidebar-section">
+        <div className="stats-row">
+          <span className="stat"><strong>{nodeCount}</strong> nodes</span>
+          <span className="stat"><strong>{edgeCount}</strong> edges</span>
+          <span className="stat"><strong>{colorCount}</strong> colors</span>
+        </div>
+      </div>
+
+      {/* Coloring validity */}
+      <div className={`validity-badge ${isValid ? 'valid' : 'invalid'}`}>
+        <span className="validity-icon">{isValid ? '✓' : '✗'}</span>
+        <span className="validity-text">{validityReason}</span>
+      </div>
+
+      {/* Tool selector */}
+      <div className="sidebar-section">
+        <div className="section-label">Tool</div>
+        <div className="mode-grid">
+          {MODES.map(m => (
+            <button
+              key={m.id}
+              className={`mode-btn ${mode === m.id ? 'active' : ''}`}
+              onClick={() => setMode(m.id)}
+              title={`${m.label}  [${m.key}]`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <div className="mode-hint">{currentMode?.hint}</div>
+      </div>
+
+      {/* Color palette */}
+      <div className="sidebar-section">
+        <div className="section-label">Color</div>
+        <div className="color-palette">
+          {COLORS.map(c => (
+            <button
+              key={c.value}
+              className={`color-swatch ${selectedColor === c.value ? 'selected' : ''}`}
+              style={{ '--swatch-color': c.value }}
+              onClick={() => setSelectedColor(c.value)}
+              title={c.name}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="sidebar-section">
+        <div className="section-label">Actions</div>
+        <div className="action-row">
+          <button
+            className="action-btn save-btn"
+            onClick={saveCheckpoint}
+            title="Save the current coloring as a checkpoint in the log"
+          >
+            Save checkpoint
+          </button>
+          <button
+            className="action-btn"
+            onClick={clearGraph}
+            title="Remove all nodes and edges"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      {/* Recoloring log */}
+      <div className="sidebar-section log-section">
+        <div className="section-label-row">
+          <span className="section-label">Recoloring Log</span>
+          {log.length > 0 && (
+            <button className="clear-log-btn" onClick={clearLog}>Clear</button>
+          )}
+        </div>
+        <div className="log-list">
+          {log.length === 0 ? (
+            <div className="log-empty">Color a node to start logging</div>
+          ) : (
+            [...log].reverse().map((entry, idx) => (
+              entry.type === 'checkpoint' ? (
+                <div key={idx} className="log-checkpoint">
+                  <span>📍</span>
+                  <span>{entry.valid ? '✓' : '✗'} {entry.reason}</span>
+                </div>
+              ) : (
+                <div key={idx} className={`log-entry ${entry.isValid ? '' : 'log-invalid'}`}>
+                  <span className="log-step">#{entry.step}</span>
+                  <span className="log-node">v{entry.nodeId}</span>
+                  <span className="log-swatch" style={{ background: entry.fromColor || '#4a5568' }} />
+                  <span className="log-arrow">→</span>
+                  <span className="log-swatch" style={{ background: entry.toColor }} />
+                  {!entry.isValid && <span className="log-warning" title="Coloring is invalid after this step">!</span>}
+                </div>
+              )
+            ))
+          )}
+        </div>
+      </div>
+
+    </div>
+  )
+}
